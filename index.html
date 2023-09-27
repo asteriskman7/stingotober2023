@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Stingotober</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Neucha&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 112 112%22><text y=%22.9em%22 font-size=%2290%22>&#x1f480;</text></svg>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      :root {
+        --bg: black;
+        --fg: white;
+        --fgd: hsl(100, 0%, 20%);
+        --hl: hsl(100, 0%, 50%);
+        --hld: hsl(200, 10%, 42%);
+        --hl2: hsl(200, 10%, 80%);
+        --font: 'Neucha', sans-serif;
+      }
+      body {
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-gap: 1em;
+        justify-items: center;
+        background: var(--bg);
+        color: var(--fg);
+        text-align: center;
+        font-family: var(--font);
+        font-size: large;
+        letter-spacing: 0.05em;
+      }
+      canvas {
+        background: white;
+        user-select: none;
+      }
+      a {
+        color: var(--hl);
+      }
+      a:visited {
+        color: var(--hl);
+      }
+      button {
+        font-family: var(--font);
+        font-size: large;
+        background: var(--hl);
+        color: var(--hld);
+        border: 1px solid var(--hld);
+        padding: 0.25em;
+        width: 4em;
+      }
+      button:focus {
+        outline: none;
+      }
+      button:hover {
+        filter: brightness(1.2);
+      }
+      button:active {
+        background: var(--hl2);
+      }
+      #calendar {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        width: 930px;
+      }
+      #month {
+        grid-column: 1 / 8;
+        font-size: 1.5em;
+      }
+      .dayDay {
+        text-align: left;
+        padding: 0.5em;
+      }
+      .promptDay {
+        text-align: left;
+        border: 1px solid var(--hl);
+        padding: 0.5em;
+        background: var(--hld);
+        cursor: pointer;
+        box-shadow: 4px 4px 10px 2px var(--hl);
+      }
+      .promptDay:hover {
+        filter: brightness(1.4);
+      }
+      .promptDayIncomplete {
+        color: var(--fgd);
+        cursor: not-allowed;
+      }
+      .promptDaySelected {
+        outline: 2px solid var(--hl2);
+      }
+      #sketchTitle {
+        font-size: xx-large;
+      }
+      .codeLink {
+        font-size: 50%;
+      }
+      #sketchDesc {
+        margin: 0.5em;
+      }
+      #wrapper {
+        margin-top: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <div id='header'>
+      <div id='calendar'>
+      </div>
+    </div>
+    <div id='content'>
+      <div id='sketchTitle'>-</div> 
+      <div id='sketchDesc'>-</div>
+      <div id='controls'>
+        <button id='buttonPause'>Pause</button>
+        <button id='buttonReset'>Reset</button>
+      </div>
+      <div id='wrapper'>
+        <canvas id='cmain' width='512' height='512'></canvas>
+      </div>
+    </div>
+    <script>
+      const sketches = [];
+      class Sketch {
+        constructor() {
+          this.canvas = app.canvas;
+          this.ctx = this.canvas.getContext('2d');
+          this.desc = '-';
+          this.mousePoint = app.mousePoint;
+          this.keys = app.keys;
+        }
+
+        load() {
+          this.t = 0;
+        }
+        unload() { }
+        update() { }
+        _update() { 
+          this.t += 0.033;
+          this.update();
+        }
+        draw(ctx, width, height, t, mousePoint) { }
+        _draw() { 
+          this.ctx.save();
+          this.draw(this.ctx, this.canvas.width, this.canvas.height, this.t, this.mousePoint);
+          this.ctx.restore();
+        }
+        rnd(seed) {
+          //return a value in [0,1)
+          const x = Math.sin(seed++) * 10000;
+          return x - Math.floor(x);
+        }
+        pnoise(x, offset) {
+          //return a value in [0, 1)
+          //x is position in 1d noise 
+          //offset selects between unique 1d noise sequences
+          offset = offset|0;
+          const x0 = Math.floor(x);
+          const x1 = x0 + 1;
+          const r0 = this.rnd(x0+offset);
+          const r1 = this.rnd(x1+offset);
+          const dx = x - x0;
+          const rx = (r1 - r0) * dx + r0;
+          return rx;
+        }
+        fnoise(x, config) {
+          //return a value in [0, 1)
+          //x is position in 1d noise
+          //config is array of objects specifying relative amplitude and frequency
+          // as {a, s}.
+          let asum = 0;
+          const r = config.reduce( (acc, c) => {
+            asum += c.a;
+            return acc + c.a * this.pnoise(x * c.s, c.s);
+          }, 0);
+          return r / asum;
+        }
+        lmap(value, inmin, inmax, outmin, outmax) {
+          const inSize = inmax - inmin;
+          const position = (value - inmin) / inSize;
+          const outSize = outmax - outmin;
+          return outmin + outSize * position;
+        }
+        fade3(t) {
+            //smooth step. maps t in [0,1] to [0,1] with slope of 0 near edges
+            return t*t*t*(t*(t*6 - 15) + 10);
+        }
+        initRndMap3() {
+          this.rndMap3 = [];
+          for (let x = 0; x < 256; x++) {
+            const col = [];
+            for (let y = 0; y < 256; y++) {
+              const cell = [Math.random(), Math.random(), Math.random()];
+              col.push(cell);
+            }
+            this.rndMap3.push(col);
+          }
+        }
+        grad3(p) {
+          //return random 3 d unit vector
+          if (this.rndMap3 === undefined) {
+            this.initRndMap3();
+          }
+          const mapx = Math.floor(p[0] + p[2]) % 256;
+          const mapy = (Math.floor(p[1] - p[2]) % 256 + 256) % 256;
+          const [rx, ry, rz] = this.rndMap3[mapx][mapy];
+          const mag = Math.sqrt(rx * rx + ry * ry + rz * rz);
+          return [rx / mag, ry / mag, rz / mag];
+        }
+        dot3(a, b) {
+          return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        }
+        sub3(a, b) {
+          return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+        }
+        noise3(p) {
+          //based on https://gpfault.net/posts/perlin-noise.txt.html
+          //don't understand why the output range is not -1 to 1
+          //don't understand why the result is rather square looking
+          const p0 = [Math.floor(p[0]), Math.floor(p[1]), Math.floor(p[2])];
+          const p1 = [p0[0] + 1, p0[1] + 0, p0[2] + 0];
+          const p2 = [p0[0] + 0, p0[1] + 1, p0[2] + 0];
+          const p3 = [p0[0] + 1, p0[1] + 1, p0[2] + 0];
+          const p4 = [p0[0] + 0, p0[1] + 0, p0[2] + 1];
+          const p5 = [p4[0] + 1, p4[1] + 0, p4[2] + 0];
+          const p6 = [p4[0] + 0, p4[1] + 1, p4[2] + 0];
+          const p7 = [p4[0] + 1, p4[1] + 1, p4[2] + 0];
+
+          const g0 = this.grad3(p0);
+          const g1 = this.grad3(p1);
+          const g2 = this.grad3(p2);
+          const g3 = this.grad3(p3);
+          const g4 = this.grad3(p4);
+          const g5 = this.grad3(p5);
+          const g6 = this.grad3(p6);
+          const g7 = this.grad3(p7);
+
+          const t0 = p[0] - p0[0];
+          const fade_t0 = this.fade3(t0);
+
+          const t1 = p[1] - p0[1];
+          const fade_t1 = this.fade3(t1);
+
+          const t2 = p[2] - p0[2];
+          const fade_t2 = this.fade3(t2);
+
+          const p0p1 = (1.0 - fade_t0) * this.dot3(g0, this.sub3(p, p0)) + fade_t0 * this.dot3(g1, this.sub3(p, p1));
+          const p2p3 = (1.0 - fade_t0) * this.dot3(g2, this.sub3(p, p2)) + fade_t0 * this.dot3(g3, this.sub3(p, p3));
+
+          const p4p5 = (1.0 - fade_t0) * this.dot3(g4, this.sub3(p, p4)) + fade_t0 * this.dot3(g5, this.sub3(p, p5));
+          const p6p7 = (1.0 - fade_t0) * this.dot3(g6, this.sub3(p, p6)) + fade_t0 * this.dot3(g7, this.sub3(p, p7));
+
+          const y1 = (1.0 - fade_t1) * p0p1 + fade_t1 * p2p3;
+          const y2 = (1.0 - fade_t1) * p4p5 + fade_t1 * p6p7;
+
+          const result = (1.0 - fade_t2) * y1 + fade_t2 * y2;
+          //for some reason, result ends up being about -0.4 to 0.4
+          return (result + 0.4) / 0.8;
+
+
+        }
+      }
+    </script>
+
+
+    <script>
+     
+      class App {
+        constructor() {
+          this.prompts = 'path,glow,delicate,pierce,tail,shield,whisper,young,infuse,fake,charge,salt,abandon,hound,bask,thorns,lurk,tightrope,friend,pain,glove,depths,creep,ice,perch,hand,dive,soft,hammer,static,failure'.split`,`;
+
+          this.sketches = [];
+          this.paused = false;
+          this.mousePoint = { x: 0, y: 0, u: 0, v: 0 };
+          this.keys = {};
+
+          this.canvas = document.getElementById('cmain');
+          document.getElementById('buttonPause').onclick = () => this.pause();
+          document.getElementById('buttonReset').onclick = () => this.reset();
+          this.canvas.onmousemove = (e) => this.mouseMove(e);
+          document.onkeydown = (e) => this.keydown(e);
+          document.onkeyup = (e) => this.keyup(e);
+          document.onclick = (e) => this.onclick(e);
+
+          this.sketchLoadsRemaining = 32; //31 sketches and the 0th sketch
+
+          this.year = 2023;
+          document.title = `Stingotober ${this.year}`;
+
+        }
+
+        initCalendar() {
+          const root = document.getElementById('calendar');
+          const divMonth = document.createElement('div');
+          divMonth.id = 'month';
+          divMonth.innerHTML = `<a href="https://www.instagram.com/p/CwqHARLOdTY">Stingotober</a> ${this.year}`;
+          root.appendChild(divMonth);
+
+          const days = 'Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday'.split`,`;
+          days.forEach( v => {
+            const dd = document.createElement('div');
+            dd.innerText = v;
+            dd.classList.add('dayDay');
+            root.appendChild(dd);
+          });
+
+          const emptyDays = (new Date(`10/01/${this.year}`)).getDay();
+          for (let i = 0; i < emptyDays; i++) {
+            const ed = document.createElement('div');
+            root.appendChild(ed);
+          }
+          this.calendarElements = [];
+          this.promptSpans = [];
+          this.prompts.forEach( (v, i) => {
+            const pd = document.createElement('div');
+            pd.classList.add('promptDay');
+            const dateSpan = document.createElement('span');
+            dateSpan.innerText = `${i+1}: `;
+            pd.appendChild(dateSpan);
+            const promptSpan = document.createElement('span');
+            promptSpan.id = `prompt${i+1}`;
+            this.promptSpans[i+1] = promptSpan;
+            promptSpan.innerText = 'loading';
+            if (this.sketches[i+1] === undefined) {
+              promptSpan.classList.add('promptDayIncomplete');
+              pd.classList.add('promptDayIncomplete');
+            }
+            this.calendarElements[i+1] = [promptSpan, pd];
+            pd.onclick = () => this.loadDay(i+1);
+            pd.appendChild(promptSpan);
+            root.appendChild(pd);
+          });
+        }
+
+        loadDay(n) {
+          console.log('Loading day', n);
+
+          if (n === -1) {
+            //get from query string
+            const queryString = window.location.search;
+            const urlParams = new URLSearchParams(queryString);
+            const querySketch = urlParams.get('sketch');
+            if (querySketch === null) {
+              n = 0;
+            } else {
+              n = querySketch;
+            }
+          }
+
+          if (this.sketches[n] === undefined) { return; }
+          if (this.currentSketch) {
+            this.currentSketch.unload();
+          }
+
+          this.currentSketch = this.sketches[n];
+          this.currentSketch.load();
+          const oldSelected = document.getElementsByClassName('promptDaySelected');
+          if (oldSelected.length > 0) {
+            oldSelected.item(0).classList.remove('promptDaySelected');
+          }
+
+          const selected = document.getElementById(`prompt${n}`);
+
+          if (selected !== null) {
+            selected.classList.add('promptDaySelected');
+            document.getElementById('sketchTitle').innerHTML = `${this.prompts[n-1]} <a href='sketch${n}.js' target='_blank' class='codeLink'>code</a>`;
+            
+          }
+
+          document.getElementById('sketchDesc').innerHTML = this.currentSketch.desc;
+          this.loadedDay = n;
+
+          if (n > 0) {
+            window.history.replaceState({}, '', `${location.pathname}?sketch=${n}`);
+          }
+        }
+
+        update() {
+          if (this.currentSketch) {
+            this.currentSketch.clicked = this.clicked;
+            this.currentSketch._update();
+          }
+        }
+
+        draw() {
+          if (this.currentSketch) {
+            this.currentSketch._draw();
+            this.clicked = false;
+          }
+        }
+
+        tick() {
+          if (!this.paused) {
+            const tstart = (new Date()).getTime();
+            this.update();
+            this.draw();
+            const tend = (new Date()).getTime();
+            const tdelta = tend - tstart;
+            this.delay = tdelta;
+          }
+        }
+
+        pause() {
+          this.paused = !this.paused;
+          if (this.paused) {
+            document.getElementById('buttonPause').innerText = 'Run';
+          } else {
+            document.getElementById('buttonPause').innerText = 'Pause';
+          }
+        }
+
+        reset() {
+          if (this.loadedDay !== undefined) {
+            this.loadDay(this.loadedDay);
+          }
+        }
+
+        mouseMove(e) {
+          const rect = this.canvas.getBoundingClientRect();
+          this.mousePoint.x = Math.max(0, e.clientX - rect.left);
+          this.mousePoint.y = Math.max(0, e.clientY - rect.top);
+          this.mousePoint.u = this.mousePoint.x / this.canvas.width;
+          this.mousePoint.v = this.mousePoint.y / this.canvas.height;
+        }
+
+        keydown(e) {
+          this.keys[e.key] = true;
+        }
+
+        keyup(e) {
+          delete this.keys[e.key];
+        }
+
+        onclick(e) {
+          this.clicked = true;
+        }
+
+        loadSketch(n) {
+          const e = document.createElement('script');
+          e.dataset.index = n;
+          e.src = `./sketch${n}.js`;
+          e.onload = () => {
+            console.log(`Day ${n} script loaded successfully`);
+            if (n !== 0) {
+              this.calendarElements[n].forEach( v => v.classList.remove('promptDayIncomplete'));
+              const promptText = this.prompts[n-1][0].toUpperCase() + this.prompts[n-1].substr(1);
+              this.promptSpans[n].innerText = promptText;
+            }
+            this.sketchLoadsRemaining--;
+            if (this.sketchLoadsRemaining === 0) {
+              this.loadDay(-1);
+              setInterval(() => app.tick(), 33);
+            }
+          }
+          e.onerror = () => {
+            console.log(`Unable to load day ${n} script`);
+            if (n !== 0) {
+              const promptText = this.prompts[n-1][0].toUpperCase() + this.prompts[n-1].substr(1);
+              this.promptSpans[n].innerText = promptText;
+            }
+            this.sketchLoadsRemaining--;
+            if (this.sketchLoadsRemaining === 0) {
+              this.loadDay(-1);
+              setInterval(() => app.tick(), 33);
+            }
+          }
+          document.body.appendChild(e);
+        }
+      }
+
+      const app = new App();
+      app.initCalendar();
+
+      window.sketchClass = undefined;
+      window.sketchNumber = undefined;
+
+      for (let i = 0; i <= 31; i++) {
+        app.loadSketch(i);
+      }
+
+    </script>
+  </body>
+</html>
