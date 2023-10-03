@@ -27,6 +27,7 @@ window.sketchClass = class extends Sketch {
     ctx.fillRect(0, 0, width, height);
 
     //draw water
+    ctx.filter = 'blur(2px)';
     ctx.fillStyle = 'hsl(226, 94%, 62%)';
     ctx.fillRect(0, 440, width, 20);
     
@@ -35,6 +36,7 @@ window.sketchClass = class extends Sketch {
     const boatx = this.lmap(((t + 120) / 60) % 10, 0, 10, -50, 550);
     const boaty = 455 + 2 *  Math.sin(t / 5);
     ctx.fillText('\u26f5', boatx, boaty);
+    ctx.filter = 'none';
 
     //draw plants
     const angle = 22.5;
