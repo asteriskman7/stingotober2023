@@ -1,7 +1,7 @@
 'use strict';
 
 window.sketchClass = class extends Sketch {
-  desc = "-";
+  static desc = "-"; // jshint ignore:line
 
   draw(ctx, width, height, t) {
     ctx.fillStyle = 'black';
@@ -11,7 +11,7 @@ window.sketchClass = class extends Sketch {
     ctx.fillText('Please select a sketch from the list above', 10, 30);
 
   }
-}
+};
 
 window.sketchNumber = document.currentScript.dataset.index;
 app.sketches[window.sketchNumber] = new window.sketchClass();

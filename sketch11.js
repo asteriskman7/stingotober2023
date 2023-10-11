@@ -1,7 +1,7 @@
 'use strict';
 
 window.sketchClass = class extends Sketch {
-  desc = "If you connect all the mitochondria in a human body end to end, you would<br>create a battery with about the same electrical potential as a lightning bolt.";
+  static desc = "If you connect all the mitochondria in a human body end to end, you would<br>create a battery with about the same electrical potential as a lightning bolt."; // jshint ignore:line
 
   constructor() {
     super();
@@ -144,7 +144,7 @@ window.sketchClass = class extends Sketch {
     }
 
   }
-}
+};
 
 window.sketchNumber = document.currentScript.dataset.index;
 app.sketches[window.sketchNumber] = new window.sketchClass();
