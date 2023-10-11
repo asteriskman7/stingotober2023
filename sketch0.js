@@ -1,7 +1,7 @@
 'use strict';
 
 window.sketchClass = class extends Sketch {
-  static desc = "-"; // jshint ignore:line
+  desc = "-"; // jshint ignore:line
 
   draw(ctx, width, height, t) {
     ctx.fillStyle = 'black';

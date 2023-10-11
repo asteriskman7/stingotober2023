@@ -1,7 +1,7 @@
 'use strict';
 
 window.sketchClass = class extends Sketch {
-  static desc = "If you connect all the mitochondria in a human body end to end, you would<br>create a battery with about the same electrical potential as a lightning bolt."; // jshint ignore:line
+  desc = "If you connect all the mitochondria in a human body end to end, you would<br>create a battery with about the same electrical potential as a lightning bolt."; // jshint ignore:line
 
   constructor() {
     super();
