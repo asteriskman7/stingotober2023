@@ -1,7 +1,7 @@
 'use strict';
 
 window.sketchClass = class extends Sketch {
-  desc = '-';
+  desc = "-";
 
   draw(ctx, width, height, t) {
     ctx.fillStyle = 'black';
