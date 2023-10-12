@@ -5,7 +5,8 @@
     "window": true,
     "Sketch": true,
     "document": true,
-    "app": true
+    "app": true,
+    "console": true
   }
 
 }
